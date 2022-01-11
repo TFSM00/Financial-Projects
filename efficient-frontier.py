@@ -1,12 +1,12 @@
 import numpy as np
 import pandas_datareader as pdr
 import datetime as dt 
-from multiapp import MultiApp
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 from dateutil import relativedelta as rd
+import statsmodels.api as sm
 
 
 def riskFreeRate():
@@ -15,7 +15,65 @@ def riskFreeRate():
     return round(rates[-1]/100, 8)
 
 
+
+
+
+def beta_rolling(tickers, start_date, end_date, window):
+    new_tickers = tickers
+    new_tickers.append("^GSPC")
+
+    data = pdr.get_data_yahoo(new_tickers, start_date, end_date, interval="m")
+    data = data["Adj Close"]
+
+    log_returns = np.log(data/data.shift())
+    df_log_returns = pd.DataFrame(log_returns)
+
+    betas = pd.DataFrame()
+    
+    for i in tickers:
+        ticker_ret = df_log_returns[i]
+        market_ret = df_log_returns["^GSPC"]
+        betas[f"{i} Beta"] = ticker_ret.rolling(window).cov() / market_ret.rolling(window).var()
+
+    del betas["^GSPC Beta"]
+
+    fig, ax = plt.subplots()
+    plt.plot(betas, label=betas.columns)
+    ax.legend()
+    ax.set(title="Rolling Beta", xlabel="Date", ylabel="Beta")
+    
+    return fig
+
+
+
+def correlation(tickers, start_date, end_date):
+    new_tickers = tickers
+    new_tickers.append("^GSPC")
+    
+    data = pdr.get_data_yahoo(tickers, start_date, end_date, interval="m")
+    data = data["Adj Close"]
+    
+    log_returns = np.log(data/data.shift())
+    correlation = log_returns.corr()
+    correlation.rename(columns={"^GSPC":"S&P500"})
+
+    fig, ax = plt.subplots()
+    sns.heatmap(correlation, annot=True)
+    ax.set(title="Correlation Matrix", xlabel="Tickers", ylabel="Tickers")
+
+    return fig
+
+def log_rets(tickers, start_date, end_date):
+    data = pdr.get_data_yahoo(tickers, start_date, end_date, interval="m")
+    data = data["Adj Close"]
+    
+   
+
+    log_returns = np.log(data/data.shift())
+    return log_returns
+
 def efficientFrontier(tickers, start_date, end_date):
+
     data = pdr.get_data_yahoo(tickers, start_date, end_date, interval="m")
     data = data["Adj Close"]
 
@@ -24,9 +82,9 @@ def efficientFrontier(tickers, start_date, end_date):
     weight = np.random.random(len(tickers))
     weight /= weight.sum()
 
-    exp_return = np.sum(log_returns.mean()*weight)*252
+    #exp_return = np.sum(log_returns.mean()* weight)*252
 
-    exp_vol = np.sqrt(np.dot(weight, np.dot(log_returns.cov()*252,weight)))
+    #exp_vol = np.sqrt(np.dot(weight, np.dot(log_returns.cov()*252,weight)))
 
     rf = riskFreeRate()
 
@@ -58,8 +116,7 @@ def efficientFrontier(tickers, start_date, end_date):
     fig.colorbar(main, label="Sharpe Ratio")
 
     return fig
-
-
+ 
 def beta(tickers, start_date, end_date):
     new_tickers = tickers
     new_tickers.append("^GSPC")
@@ -67,8 +124,8 @@ def beta(tickers, start_date, end_date):
     data = pdr.get_data_yahoo(new_tickers, start_date, end_date, interval="m")
     data = data["Adj Close"]
 
-    log_returns = np.log(data/data.shift())
-
+    log_returns = pd.DataFrame(np.log(data/data.shift()))
+    
     cov = log_returns.cov()
     var = log_returns["^GSPC"].var()
 
@@ -76,98 +133,38 @@ def beta(tickers, start_date, end_date):
     
     beta_table = beta_values.to_frame("Beta")["Beta"]
     beta_table.rename({"^GSPC":"S&P500"}, inplace=True)
-
+    
     return beta_table
 
-def beta_rolling(tickers, start_date, end_date, window):
-    new_tickers = tickers
-    new_tickers.append("^GSPC")
 
-    data = pdr.get_data_yahoo(new_tickers, start_date, end_date, interval="m")
-    data = data["Adj Close"]
-
-    log_returns = np.log(data/data.shift())
-    df_log_returns = pd.DataFrame(log_returns)
-
-    betas = pd.DataFrame()
-    
-    for i in tickers:
-        ticker_ret = df_log_returns[i]
-        market_ret = df_log_returns["^GSPC"]
-        betas[f"{i} Beta"] = ticker_ret.rolling(window).cov() / market_ret.rolling(window).var()
-
-    betas = betas.dropna()
-    del betas["^GSPC Beta"]
-
-    fig, ax = plt.subplots()
-    ax.legend()
-    plt.plot(betas)
-    ax.set(title="Rolling Beta", xlabel="Date", ylabel="Beta")
-    
-    return fig
-
-
-
-def correlation(tickers, start_date, end_date):
-    data = pdr.get_data_yahoo(tickers, start_date, end_date, interval="m")
-    data = data["Adj Close"]
-    
-    sp500 = pdr.get_data_yahoo("^GSPC", start_date, end_date)
-
-    log_returns = np.log(data/data.shift())
-    log_returns["S&P500"] = np.log(sp500["Adj Close"]/sp500["Adj Close"].shift())
-    correlation = log_returns.corr()
-
-    fig, ax = plt.subplots()
-    sns.heatmap(correlation, annot=True)
-    ax.set(title="Correlation Matrix", xlabel="Tickers", ylabel="Tickers")
-
-    return fig
-
-def log_rets(tickers, start_date, end_date):
-    data = pdr.get_data_yahoo(tickers, start_date, end_date, interval="m")
-    data = data["Adj Close"]
-    
-   
-
-    log_returns = np.log(data/data.shift())
-    return log_returns
-
- 
 st.set_page_config(layout="wide")
-
-st.markdown("""
-#Financial Analysis Toolkit
-##Made by Tiago Moreira
-
-""")
-
-st.button("Efficient Frontier")
-st.button("Correlation Table")
-st.button("Beta Table")
-st.button("Rolling Beta")
-st.button("Logarithmic Returns")
-
-
 
 ticker_input = st.sidebar.text_input("Enter the tickers space-separated")
 tickers = ticker_input.strip()
 tickers = tickers.split(" ")
 start_date = st.sidebar.date_input('Start date (format=DD/MM/YYYY)', min_value=dt.datetime(1950,1,1))
-end_date = st.sidebar.date_input('End date (format=DD-MM-YYYY')
+end_date = st.sidebar.date_input('End date (format=DD/MM/YYYY)', max_value=dt.datetime.today())
 month_delta = rd.relativedelta(end_date,start_date).years * 12
-run_button = st.sidebar.button("Run calculations")
 beta_window = st.sidebar.slider("Rolling Beta Window", 1, int(month_delta/4))
+run_button = st.sidebar.button("Run calculations")
+
+# Conflict between Beta Function and Efficient Frontier
 
 with st.spinner(text='In progress'):
     if run_button:
         if start_date < end_date:
             st.sidebar.success('Start date: `%s`\n\nEnd date: `%s`' % (start_date, end_date))
-            #st.table(pd.DataFrame(beta(tickers, start_date, end_date)))
-            #st.pyplot(correlation(tickers, start_date, end_date))
-            #st.text("Efficient Frontier")
-            st.pyplot(efficientFrontier(tickers, start_date, end_date))           #add capital market line radio button
-            #st.pyplot(beta_rolling(tickers,start_date, end_date, beta_window))
+            st.header("Financial Analysis Toolkit")
+            st.subheader("Made by Tiago Moreira")
+            st.subheader("Correlation between chosen stocks and the market")
+            st.pyplot(correlation(tickers, start_date, end_date))
+            st.subheader("Efficient Frontier")
+            st.pyplot(efficientFrontier(tickers, start_date, end_date))  #add capital market line radio button
+            st.subheader("Overall Beta")
+            st.dataframe(beta(tickers, start_date, end_date))
+            st.subheader("Rolling Beta")
+            st.pyplot(beta_rolling(tickers,start_date, end_date, beta_window))
+            st.write("Beware: Rolling window starts on the date of the latest of the stocks to enter the market.")
             #st.dataframe(log_rets(tickers, start_date, end_date))
         else:
             st.sidebar.error('Error: End date must fall after start date.')

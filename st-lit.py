@@ -1,12 +1,13 @@
 import streamlit as st
+import pandas as pd
 
-placeholder = st.empty()
+table_data = {'Column 1': [1, 2], 'Column 2': [3, 4]}
 
-title = placeholder.write("Hello Bitch")
-here = placeholder.button("Here")
-there = placeholder.button("There")
-
-if here:
-    placeholder.empty()
-    placeholder.write("Hello")
+if st.button('delet dis'):
+    del table_data
+    st.write('mr button has delet for u')
     
+try:
+    st.write(pd.DataFrame(data=table_data))
+except:
+    pass
